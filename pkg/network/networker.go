@@ -21,6 +21,7 @@ import (
 	"github.com/threefoldtech/zos/pkg/network/yggdrasil"
 
 	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/containernetworking/plugins/pkg/utils/sysctl"
 	"github.com/vishvananda/netlink"
 
 	"github.com/pkg/errors"
@@ -48,6 +49,7 @@ const (
 	ipamLeaseDir       = "ndmz-lease"
 	ipamPath           = "/var/cache/modules/networkd/lease"
 	zdbNamespacePrefix = "zdb-ns-"
+	yggIface           = "ygg"
 )
 
 const (
@@ -241,8 +243,17 @@ func (n *networker) Join(networkdID pkg.NetID, containerID string, cfg pkg.Conta
 			},
 		}
 
-		if err := n.createMacVlan("ygg", hw, ips, routes, netNs); err != nil {
+		if err := n.createMacVlan(yggIface, hw, ips, routes, netNs); err != nil {
 			return join, errors.Wrap(err, "failed to create yggdrasil macvlan interface")
+		}
+
+		err = netNs.Do(func(_ ns.NetNS) error {
+			//disable router advertisement on ygg iface, we do NOT want to receive IP from the farm router
+			_, err := sysctl.Sysctl(fmt.Sprintf("net.ipv6.conf.%s.accept_ra", yggIface), "0")
+			return err
+		})
+		if err != nil {
+			return join, fmt.Errorf("failed to disable router advertisement on ygg interface: %w", err)
 		}
 	}
 
