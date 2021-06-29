@@ -153,7 +153,7 @@ func metricsForNics(nics []string) (m pkg.MachineMetric, err error) {
 				continue
 			}
 
-			*ptr = value
+			*ptr += value
 		}
 	}
 
