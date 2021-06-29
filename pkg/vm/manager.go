@@ -370,13 +370,13 @@ func (m *Module) waitAndAdjOom(ctx context.Context, name string) error {
 		return err
 	}
 
-	pid, err := find(name)
+	ps, err := find(name)
 	if err != nil {
 		return errors.Wrapf(err, "failed to find vm with id '%s'", name)
 	}
 
-	if err := ioutil.WriteFile(filepath.Join("/proc/", fmt.Sprint(pid), "oom_adj"), []byte("-17"), 0644); err != nil {
-		return errors.Wrapf(err, "failed to update oom priority for machine '%s' (PID: %d)", name, pid)
+	if err := ioutil.WriteFile(filepath.Join("/proc/", fmt.Sprint(ps), "oom_adj"), []byte("-17"), 0644); err != nil {
+		return errors.Wrapf(err, "failed to update oom priority for machine '%s' (PID: %d)", name, ps.Pid)
 	}
 
 	return nil
@@ -422,7 +422,7 @@ func (m *Module) Delete(name string) error {
 	}
 
 	// normal operation
-	pid, err := find(name)
+	ps, err := find(name)
 	if err != nil {
 		// machine already gone
 		return nil
@@ -454,12 +454,12 @@ func (m *Module) Delete(name string) error {
 
 		log.Debug().Str("name", name).Msg("shutting vm down [sigterm]")
 		if time.Since(now) > termAfter {
-			syscall.Kill(pid, syscall.SIGTERM)
+			syscall.Kill(ps.Pid, syscall.SIGTERM)
 		}
 
 		if time.Since(now) > killAfter {
 			log.Debug().Str("name", name).Msg("shutting vm down [sigkill]")
-			syscall.Kill(pid, syscall.SIGKILL)
+			syscall.Kill(ps.Pid, syscall.SIGKILL)
 			break
 		}
 

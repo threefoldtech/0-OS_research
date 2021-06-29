@@ -1,6 +1,7 @@
 package pkg
 
 import (
+	"context"
 	"fmt"
 	"net"
 )
@@ -115,6 +116,15 @@ type VMInfo struct {
 	CPU int64
 }
 
+type MachineMetric struct {
+	NetRxPackets uint64 `json:"net_rx_packets"`
+	NetRxBytes   uint64 `json:"net_rx_bytes"`
+	NetTxPackets uint64 `json:"net_tx_packets"`
+	NetTxBytes   uint64 `json:"net_tx_bytes"`
+}
+
+type MachineMetrics map[string]MachineMetric
+
 // VMModule defines the virtual machine module interface
 type VMModule interface {
 	Run(vm VM) error
@@ -123,4 +133,6 @@ type VMModule interface {
 	Exists(name string) bool
 	Logs(name string) (string, error)
 	List() ([]string, error)
+	// export vm usage metrics
+	Metrics(ctx context.Context) <-chan MachineMetrics
 }
