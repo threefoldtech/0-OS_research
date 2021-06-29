@@ -1,6 +1,7 @@
 package stubs
 
 import (
+	"context"
 	zbus "github.com/threefoldtech/zbus"
 	pkg "github.com/threefoldtech/zos/pkg"
 )
@@ -93,6 +94,25 @@ func (s *VMModuleStub) Logs(arg0 string) (ret0 string, ret1 error) {
 		panic(err)
 	}
 	return
+}
+
+func (s *VMModuleStub) Metrics(ctx context.Context) (<-chan pkg.MachineMetrics, error) {
+	ch := make(chan pkg.MachineMetrics)
+	recv, err := s.client.Stream(ctx, s.module, s.object, "Metrics")
+	if err != nil {
+		return nil, err
+	}
+	go func() {
+		defer close(ch)
+		for event := range recv {
+			var obj pkg.MachineMetrics
+			if err := event.Unmarshal(&obj); err != nil {
+				panic(err)
+			}
+			ch <- obj
+		}
+	}()
+	return ch, nil
 }
 
 func (s *VMModuleStub) Run(arg0 pkg.VM) (ret0 error) {
