@@ -39,7 +39,7 @@ func (p *Primitives) zdbProvision(ctx context.Context, wl *gridtypes.WorkloadWit
 
 func (p *Primitives) zdbProvisionImpl(ctx context.Context, wl *gridtypes.WorkloadWithID) (zos.ZDBResult, error) {
 	var (
-		storage = stubs.NewZDBAllocaterStub(p.zbus)
+		storage = stubs.NewStorageModuleStub(p.zbus)
 
 		nsID   = wl.ID.String()
 		config ZDB
@@ -50,7 +50,7 @@ func (p *Primitives) zdbProvisionImpl(ctx context.Context, wl *gridtypes.Workloa
 
 	// if we reached here, we need to create the 0-db namespace
 	log.Debug().Msg("allocating storage for namespace")
-	allocation, err := storage.Allocate(ctx, nsID, config.DiskType, config.Size, config.Mode)
+	allocation, err := storage.ZDBAllocate(ctx, nsID, config.Size, config.Mode)
 	if err != nil {
 		return zos.ZDBResult{}, errors.Wrap(err, "failed to allocate storage")
 	}
@@ -192,7 +192,7 @@ func (p *Primitives) createZdbContainer(ctx context.Context, allocation pkg.Allo
 		return err
 	}
 
-	cmd := fmt.Sprintf("/bin/zdb --data /data --index /data --mode %s  --listen :: --port %d --socket /socket/zdb.sock --dualnet", string(mode), zdbPort)
+	cmd := fmt.Sprintf("/bin/zdb --data /data --index /data  --listen :: --port %d --socket /socket/zdb.sock --dualnet", zdbPort)
 
 	err = p.zdbRun(ctx, string(name), rootFS, cmd, netNsName, volumePath, socketDir)
 	if err != nil {
@@ -343,7 +343,6 @@ func (p *Primitives) createZDBNamespace(containerID pkg.ContainerID, nsID string
 
 func (p *Primitives) zdbDecommission(ctx context.Context, wl *gridtypes.WorkloadWithID) error {
 	var (
-		storage       = stubs.NewZDBAllocaterStub(p.zbus)
 		storageClient = stubs.NewStorageModuleStub(p.zbus)
 
 		config zos.ZDB
@@ -354,7 +353,7 @@ func (p *Primitives) zdbDecommission(ctx context.Context, wl *gridtypes.Workload
 		return errors.Wrap(err, "failed to decode reservation schema")
 	}
 
-	allocation, err := storage.Find(ctx, wl.ID.String())
+	allocation, err := storageClient.ZDBFind(ctx, wl.ID.String())
 	if err != nil && strings.Contains(err.Error(), "not found") {
 		return nil
 	} else if err != nil {
@@ -395,7 +394,7 @@ func (p *Primitives) zdbDecommission(ctx context.Context, wl *gridtypes.Workload
 
 		log.Info().Msgf("deleting subvolumes of reservation: %s", allocation.VolumeID)
 		// we also need to delete the flist volume
-		return storageClient.ReleaseFilesystem(ctx, allocation.VolumeID)
+		return storageClient.VolumeRelease(ctx, allocation.VolumeID)
 	}
 
 	return nil

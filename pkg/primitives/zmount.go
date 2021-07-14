@@ -22,12 +22,12 @@ func (p *Primitives) volumeProvisionImpl(ctx context.Context, wl *gridtypes.Work
 	}
 
 	vol.ID = wl.ID.String()
-	vdisk := stubs.NewVDiskModuleStub(p.zbus)
-	if vdisk.Exists(ctx, vol.ID) {
+	vdisk := stubs.NewStorageModuleStub(p.zbus)
+	if vdisk.VDiskExists(ctx, vol.ID) {
 		return vol, nil
 	}
 
-	_, err = vdisk.Allocate(ctx, vol.ID, config.Size)
+	_, err = vdisk.VDiskAllocate(ctx, vol.ID, config.Size)
 
 	return vol, err
 }
@@ -40,5 +40,5 @@ func (p *Primitives) zMountProvision(ctx context.Context, wl *gridtypes.Workload
 func (p *Primitives) zMountDecommission(ctx context.Context, wl *gridtypes.WorkloadWithID) error {
 	storageClient := stubs.NewStorageModuleStub(p.zbus)
 
-	return storageClient.ReleaseFilesystem(ctx, wl.ID.String())
+	return storageClient.VDiskDeallocate(ctx, wl.ID.String())
 }

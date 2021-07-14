@@ -17,56 +17,14 @@ import (
 	"github.com/threefoldtech/zos/pkg/storage/zdbpool"
 )
 
-// Find finds a zdb namespace allocation
-func (s *Module) Find(nsID string) (allocation pkg.Allocation, err error) {
-	for _, pool := range s.pools {
-		if _, mounted := pool.Mounted(); !mounted {
-			continue
-		}
-
-		volumes, err := pool.Volumes()
-		if err != nil {
-			return allocation, errors.Wrapf(err, "failed to list volume on pool %s", pool.Name())
-		}
-
-		for _, volume := range volumes {
-			// skip all non-zdb volume
-			if !filesystem.IsZDBVolume(volume) {
-				continue
-			}
-
-			zdb := zdbpool.New(volume.Path())
-
-			if !zdb.Exists(nsID) {
-				continue
-			}
-
-			// we found the namespace
-			allocation = pkg.Allocation{
-				VolumeID:   volume.Name(),
-				VolumePath: volume.Path(),
-			}
-
-			return allocation, nil
-		}
-	}
-
-	return pkg.Allocation{}, fmt.Errorf("not found")
-}
-
-// Allocate is responsible to make sure the subvolume used by a 0-db as enough storage capacity
+// ZDBAllocate is responsible to make sure the subvolume used by a 0-db as enough storage capacity
 // of specified size, type and mode
 // it returns the volume ID and its path or an error if it couldn't allocate enough storage
-func (s *Module) Allocate(nsID string, diskType pkg.DeviceType, size gridtypes.Unit, mode pkg.ZDBMode) (allocation pkg.Allocation, err error) {
+func (s *Module) ZDBAllocate(nsID string, size gridtypes.Unit, mode pkg.ZDBMode) (allocation pkg.Allocation, err error) {
 	log := log.With().
-		Str("type", string(diskType)).
 		Uint64("size", uint64(size)).
 		Str("mode", string(mode)).
 		Logger()
-
-	if diskType != zos.HDDDevice && diskType != zos.SSDDevice {
-		return allocation, pkg.ErrInvalidDeviceType{DeviceType: diskType}
-	}
 
 	log.Info().Msg("try to allocation space for 0-DB")
 
@@ -78,7 +36,7 @@ func (s *Module) Allocate(nsID string, diskType pkg.DeviceType, size gridtypes.U
 		}
 
 		// skip pool with wrong disk type
-		if pool.Type() != diskType {
+		if pool.Type() != zos.HDDDevice {
 			continue
 		}
 
@@ -116,7 +74,7 @@ func (s *Module) Allocate(nsID string, diskType pkg.DeviceType, size gridtypes.U
 	}
 
 	// check for candidates in mounted pools first
-	candidates, err := s.checkForZDBCandidateVolumes(size, diskType, targetMode)
+	candidates, err := s.checkForZDBCandidateVolumes(size, zos.HDDDevice, targetMode)
 	if err != nil {
 		log.Error().Err(err).Msgf("failed to search volumes on mounted pools")
 		return allocation, err
@@ -142,7 +100,7 @@ func (s *Module) Allocate(nsID string, diskType pkg.DeviceType, size gridtypes.U
 
 		// we create the zdb volume without configuring a quota
 		// the used size will the computed from the 0-db namespaces themselves
-		volume, err = s.createSubvol(size, name, diskType)
+		volume, err = s.createSubvol(size, name, zos.HDDDevice)
 		if err != nil {
 			return allocation, errors.Wrap(err, "failed to create sub-volume")
 		}
@@ -158,7 +116,43 @@ func (s *Module) Allocate(nsID string, diskType pkg.DeviceType, size gridtypes.U
 		VolumeID:   volume.Name(),
 		VolumePath: volume.Path(),
 	}, nil
+}
 
+// ZDBFind finds a zdb namespace allocation
+func (s *Module) ZDBFind(nsID string) (allocation pkg.Allocation, err error) {
+	for _, pool := range s.pools {
+		if _, mounted := pool.Mounted(); !mounted {
+			continue
+		}
+
+		volumes, err := pool.Volumes()
+		if err != nil {
+			return allocation, errors.Wrapf(err, "failed to list volume on pool %s", pool.Name())
+		}
+
+		for _, volume := range volumes {
+			// skip all non-zdb volume
+			if !filesystem.IsZDBVolume(volume) {
+				continue
+			}
+
+			zdb := zdbpool.New(volume.Path())
+
+			if !zdb.Exists(nsID) {
+				continue
+			}
+
+			// we found the namespace
+			allocation = pkg.Allocation{
+				VolumeID:   volume.Name(),
+				VolumePath: volume.Path(),
+			}
+
+			return allocation, nil
+		}
+	}
+
+	return pkg.Allocation{}, fmt.Errorf("not found")
 }
 
 type zdbcandidate struct {
